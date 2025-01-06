@@ -1,0 +1,17 @@
+---
+
+pr:
+- main
+
+trigger:
+- main
+
+pool:
+  vmImage: ubuntu-latest
+
+stages:
+- template: azure-pipelines/pr-validation-build.yml
+- template: azure-pipelines/build.yml
+- template: azure-pipelines/production.yml
+
+...

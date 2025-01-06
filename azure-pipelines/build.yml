@@ -1,0 +1,109 @@
+---
+
+stages:
+- stage: Build
+  condition: ne(variables['Build.Reason'], 'PullRequest')
+  displayName: Build & Test
+  variables:
+  - group: utilities-jwt-ed25519
+  - group: Sonarqube
+
+  jobs:
+  # Determine and set condition variables
+  - job: Determine
+    displayName: Determine and set condition variables
+    steps:
+    # check if there are any tests to run
+    - bash: |
+        if [ -f test/*/*.Tests.csproj &> /dev/null ]; then
+          echo "##vso[task.setvariable variable=HasTestProjects;isoutput=true]true"
+        else
+          echo "##vso[task.setvariable variable=HasTestProjects;isoutput=true]false"
+        fi
+      name: printvar
+
+  # Run unit tests and code scanning then merge and publish test reports
+  - job: TestAndScan
+    dependsOn: Determine
+    displayName: Unit testing & code scanning
+    variables:
+      hasTestProjects: $[ dependencies.Determine.outputs['printvar.HasTestProjects'] ]
+    condition: or(eq(variables['Build.RunCodeScan'], 'true'), eq(variables['hasTestProjects'], 'true'))
+    steps:
+
+    # download .NET sdk
+    - task: UseDotNet@2
+      displayName: Use .NET Core sdk $(Build.DotnetSdkVersion)
+      inputs:
+        version: $(Build.DotnetSdkVersion)
+
+    # prepare code scanning
+    - task: JavaToolInstaller@0
+      displayName: Install Java 17
+      inputs:
+        versionSpec: '17'
+        jdkArchitectureOption: 'x64'
+        jdkSourceOption: 'PreInstalled'
+
+    - task: DotNetCoreCLI@2
+      condition: eq(variables['Build.RunCodeScan'], 'true')
+      displayName: Install code scanner
+      inputs:
+        command: 'custom'
+        custom: 'tool'
+        arguments: 'update --global dotnet-sonarscanner'
+
+    - task: DotNetCoreCLI@2
+      condition: eq(variables['Build.RunCodeScan'], 'true')
+      displayName: Prepare code scanning
+      inputs:
+        command: 'custom'
+        custom: 'sonarscanner'
+        arguments: 'begin /o:$(Sonarqube.Organization) /k:$(Sonarqube.ProjectKey) /d:sonar.host.url=$(Sonarqube.Host) /d:sonar.login=$(Sonarqube.Token) /d:sonar.cs.opencover.reportsPaths=**/coverage.opencover.xml /v:$(Build.Version)'
+
+    # build for code scanning
+    - task: DotNetCoreCLI@2
+      condition: eq(variables['Build.RunCodeScan'], 'true')
+      displayName: Build for code scanning
+      inputs:
+        projects: '$(Build.BuildProjects)'
+        arguments: '-c $(Build.BuildConfiguration)'
+
+    # unit testing if test projects exist
+    - task: DotNetCoreCLI@2
+      condition: eq(variables['hasTestProjects'], 'true')
+      displayName: Run unit tests
+      inputs:
+        command: 'test'
+        projects: '**/*.Tests.csproj'
+        publishTestResults: true
+        arguments: '-c $(Build.BuildConfiguration) /p:CollectCoverage=true /p:CoverletOutputFormat=opencover'
+
+    # merge test reports, convert to Cobertura type
+    - task: reportgenerator@5
+      condition: eq(variables['hasTestProjects'], 'true')
+      displayName: Merge code coverage reports
+      inputs:
+        reports: '**/*coverage.*.xml'
+        targetdir: '$(Pipeline.Workspace)/coverlet'
+        reporttypes: 'Cobertura'
+        verbosity: 'Verbose'
+
+    # publish test report to azure pipeline
+    - task: PublishCodeCoverageResults@1
+      condition: eq(variables['hasTestProjects'], 'true')
+      displayName: Publish code coverage reports
+      inputs:
+        codeCoverageTool: 'Cobertura'
+        summaryFileLocation: '$(Pipeline.Workspace)/coverlet/Cobertura.xml'
+
+    # publish code analysis report to sonarqube server
+    - task: DotNetCoreCLI@2
+      condition: eq(variables['Build.RunCodeScan'], 'true')
+      displayName: Publish code analysis report
+      inputs:
+        command: 'custom'
+        custom: 'sonarscanner'
+        arguments: 'end /d:sonar.login=$(Sonarqube.Token)'
+
+...
