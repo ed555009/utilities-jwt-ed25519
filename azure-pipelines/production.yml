@@ -1,0 +1,70 @@
+---
+
+stages:
+- stage: Production
+  dependsOn: Build
+  condition: and(eq(variables['Build.SourceBranch'], 'refs/heads/main'), succeeded('Build'))
+  displayName: Production release
+  variables:
+  - group: utilities-jwt-ed25519
+
+  # Pack and upload package to NuGet
+  jobs:
+  - deployment: PackAndUpload
+    displayName: Pack and upload package to NuGet
+    environment: Production
+    strategy:
+      runOnce:
+        deploy:
+          steps:
+
+          # checkout
+          - checkout: self
+
+          # download .NET sdk
+          - task: UseDotNet@2
+            displayName: Use .NET Core sdk $(Build.DotnetSdkVersion)
+            inputs:
+              version: $(Build.DotnetSdkVersion)
+
+          # pack
+          - task: DotNetCoreCLI@2
+            displayName: Pack
+            inputs:
+              command: pack
+              packagesToPack: $(Build.BuildProjects)
+              versioningScheme: byEnvVar
+              versionEnvVar: Build.Version
+
+          # upload package
+          - task: NuGetCommand@2
+            displayName: Upload package to NuGet
+            inputs:
+              command: push
+              searchPatternPush: $(Build.ArtifactStagingDirectory)/**/*.nupkg;!$(Build.ArtifactStagingDirectory)/**/*.Tests.nupkg;!$(Build.ArtifactStagingDirectory)/**/*.symbols.nupkg
+              nuGetFeedType: external
+              publishFeedCredentials: Nuget-github
+
+  # Create tag
+  - deployment: CreateTag
+    displayName: Create tag
+    environment: Production
+    dependsOn: PackAndUpload
+    condition: succeeded()
+    strategy:
+      runOnce:
+        deploy:
+          steps:
+
+          - download: none
+
+          # checkout
+          - checkout: self
+            persistCredentials: true
+
+          - script: |
+              git tag $(Build.Version)
+              git push origin $(Build.Version)
+            workingDirectory: $(Build.SourcesDirectory)
+
+...
