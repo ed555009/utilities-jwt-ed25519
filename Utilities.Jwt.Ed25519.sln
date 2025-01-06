@@ -1,0 +1,27 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.0.31903.59
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "src", "src", "{FAF4D40F-E634-4AC0-B793-B6B7D8A48624}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Utilities.Jwt.Ed25519", "src\Utilities.Jwt.Ed25519\Utilities.Jwt.Ed25519.csproj", "{FB4F10B7-E7E6-49AB-9FF8-42F69EFB17BA}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{FB4F10B7-E7E6-49AB-9FF8-42F69EFB17BA}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{FB4F10B7-E7E6-49AB-9FF8-42F69EFB17BA}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{FB4F10B7-E7E6-49AB-9FF8-42F69EFB17BA}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{FB4F10B7-E7E6-49AB-9FF8-42F69EFB17BA}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{FB4F10B7-E7E6-49AB-9FF8-42F69EFB17BA} = {FAF4D40F-E634-4AC0-B793-B6B7D8A48624}
+	EndGlobalSection
+EndGlobal
