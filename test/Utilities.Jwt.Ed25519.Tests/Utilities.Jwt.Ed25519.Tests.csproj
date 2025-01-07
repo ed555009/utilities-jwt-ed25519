@@ -26,6 +26,6 @@
     <None Update="private.pem" CopyToOutputDirectory="PreserveNewest" />
     <None Update="public.pem" CopyToOutputDirectory="PreserveNewest" />
     <None Update="private_rsa.key" CopyToOutputDirectory="PreserveNewest" />
-	<None Update="public_rsa.pem" CopyToOutputDirectory="PreserveNewest" />
+    <None Update="public_rsa.pem" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>
