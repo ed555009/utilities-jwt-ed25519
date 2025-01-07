@@ -12,6 +12,8 @@
 
 This library provides a lightweight implementation for generating and validating JSON Web Tokens (JWTs) using the Ed25519 public-private key algorithm ([RFC8032](https://datatracker.ietf.org/doc/html/rfc8032)). It supports the registered JWT claims ([RFC7519](https://datatracker.ietf.org/doc/html/rfc7519)) `iss`, `sub`, `aud`, `exp`, `nbf`, `iat`, `jti` and allows users to dynamically add custom claims.
 
+This library also works with generic payloads class implementing the `IBaseJwtPayload` interface.
+
 
 ## Ed25519 Key Algorithm Overview
 Ed25519 is a modern, highly efficient digital signature scheme based on the **Edwards-curve Digital Signature Algorithm (EdDSA)**. It is designed to provide fast signing and verification while ensuring strong security. Ed25519 is especially well-suited for use cases where performance, key size, and security are critical, ideal for scenarios requiring fast signing and verification, small key sizes, and strong security. It is particularly efficient in resource-constrained environments like IoT devices and mobile applications.
@@ -93,7 +95,7 @@ var payload = new JwtPayload
 	Expiration = now.AddMinutes(1).ToUnixTimeSeconds(),
 	IssuedAt = now.ToUnixTimeSeconds(),
 	NotBefore = now.ToUnixTimeSeconds(),
-	JwtId = Guid.NewGuid().ToString();
+	JwtId = Guid.NewGuid().ToString()
 };
 
 // add custom claims (any type)
@@ -135,6 +137,48 @@ var isValid = JwtService.ValidateToken(token, publicKey, out var payload);
 
 **Note:** `payload` is `Dictionary<string, object>?` type, `ValidateToken()` only validates the token `signature` and `algorithm`, it does not validate the token claims. You can validate the claims manually by checking the payload values.
 
+### Custom payload class
+
+You can use your custom payload class by inheriting the `BaseJwtPayload` class.
+
+```csharp
+using System.Text.Json.Serialization;
+
+public class MyCustomPayload : BaseJwtPayload
+{
+	[JsonPropertyName("custom_claim")]
+	public string? CustomClaim { get; set; }
+}
+```
+
+Then, use the custom payload class with the `JwtService`.
+
+```csharp
+// prepare payload
+var now = DateTimeOffset.UtcNow;
+var payload = new MyCustomPayload
+{
+	Subject = "Subject",
+	Issuer = "Issuer",
+	Audience = "Audience",
+	Expiration = now.AddMinutes(1).ToUnixTimeSeconds(),
+	IssuedAt = now.ToUnixTimeSeconds(),
+	NotBefore = now.ToUnixTimeSeconds(),
+	JwtId = Guid.NewGuid().ToString(),
+	CustomClaim = "CustomClaimValue"
+};
+```
+
+Finally, build and validate the token.
+
+```csharp
+// build token
+var token = JwtService.BuildToken<MyCustomPayload>(payload, privateKey);
+
+// validate token
+var isValid = JwtService.ValidateToken<MyCustomPayload>(token, publicKey, out var payload);
+```
+
 ## Benchmark
 
 ```
@@ -144,8 +188,9 @@ Apple M3 Pro, 1 CPU, 11 logical and 11 physical cores
   [Host]     : .NET 8.0.6 (8.0.624.26715), Arm64 RyuJIT AdvSIMD
   DefaultJob : .NET 8.0.6 (8.0.624.26715), Arm64 RyuJIT AdvSIMD
 ```
-
-| Method        | Mean     | Error    | StdDev   | Median   | Allocated |
-|-------------- |---------:|---------:|---------:|---------:|----------:|
-| BuildToken    | 51.10 μs | 0.992 μs | 1.357 μs | 50.50 μs |  69.23 KB |
-| ValidateToken | 68.67 μs | 1.362 μs | 2.200 μs | 67.07 μs | 136.38 KB |
+| Method                         | Mean     | Error    | StdDev   | Allocated |
+|------------------------------- |---------:|---------:|---------:|----------:|
+| BuildToken                     | 50.59 μs | 1.006 μs | 0.988 μs |  69.23 KB |
+| BuildTokenWithCustomPayload    | 52.34 μs | 1.018 μs | 1.288 μs |  68.09 KB |
+| ValidateToken                  | 69.59 μs | 1.359 μs | 2.270 μs | 136.41 KB |
+| ValidateTokenWithCustomPayload | 69.20 μs | 1.382 μs | 2.760 μs | 133.68 KB |

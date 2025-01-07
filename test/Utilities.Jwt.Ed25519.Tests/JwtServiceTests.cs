@@ -13,6 +13,7 @@ public class JwtServiceTests(ITestOutputHelper testOutputHelper)
 	private readonly string _jti = "26eb75d3-b86b-4954-be70-99e7d34f13cb";
 	private readonly long _customClaim = 1325650983061250049;
 	private readonly string _token = "eyJhbGciOiJFZERTQSIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJ0ZXN0Iiwic3ViIjoidGVzdCIsImF1ZCI6InRlc3QiLCJleHAiOjE3MzYxNTIzMTMsIm5iZiI6MTczNjE1MjI1MywiaWF0IjoxNzM2MTUyMjUzLCJqdGkiOiIyNmViNzVkMy1iODZiLTQ5NTQtYmU3MC05OWU3ZDM0ZjEzY2IiLCJjdXN0b21fY2xhaW0iOjEzMjU2NTA5ODMwNjEyNTAwNDl9.D5UtE9fiLdScOShbn1LhLNE_5sOlUS4ceSDxuuvFWN3P_OkuNio4jKxJxFTjkQUsHNBFasjIIu_ASM515BMwCg";
+	private readonly string _customPayloadToken = "eyJhbGciOiJFZERTQSIsInR5cCI6IkpXVCJ9.eyJjdXN0b21fY2xhaW0iOiJDdXN0b21DbGFpbVZhbHVlIiwiaXNzIjoidGVzdCIsInN1YiI6InRlc3QiLCJhdWQiOiJ0ZXN0IiwiZXhwIjoxNzM2MTUyMzEzLCJuYmYiOjE3MzYxNTIyNTMsImlhdCI6MTczNjE1MjI1MywianRpIjoiMjZlYjc1ZDMtYjg2Yi00OTU0LWJlNzAtOTllN2QzNGYxM2NiIn0.9xvehbqez-cJWiC8xnYsiI-vxh2rSru1JbNdp3nZYruTJhTp8EvSEQCcnLHEIhLfgp3x5wKQcsAarTxyGtuGCg";
 	private readonly string _privateKey = @"-----BEGIN PRIVATE KEY-----
 MC4CAQAwBQYDK2VwBCIEIBjirw/3PNIj5F6kfA100R6k2s9Wgb7yxYrVZbDfnOJf
 -----END PRIVATE KEY-----
@@ -66,6 +67,29 @@ MCowBQYDK2VwAyEAFYcbSrDaJytx/y7qxFZQpUGb+GORxSBWY2PrOo5fnIY=
 
 		// Then
 		Assert.Equal(_token, token);
+	}
+
+	[Fact]
+	public void BuildTokenWithCustomPayloadShouldSuccess()
+	{
+		// Given
+		var payload = new CustomPayload
+		{
+			Subject = "test",
+			Issuer = "test",
+			Audience = "test",
+			Expiration = _exp,
+			IssuedAt = _now,
+			NotBefore = _now,
+			JwtId = _jti,
+			CustomClaim = "CustomClaimValue"
+		};
+
+		// When
+		var token = JwtService.BuildToken(payload, JwtService.LoadPrivateKey(_privateKey));
+
+		// Then
+		Assert.Equal(_customPayloadToken, token);
 	}
 
 	[Fact]
@@ -132,7 +156,7 @@ MCowBQYDK2VwAyEAFYcbSrDaJytx/y7qxFZQpUGb+GORxSBWY2PrOo5fnIY=
 		};
 
 		var token = JwtService.BuildToken(payload, JwtService.LoadPrivateKey(_privateKey, LoadKeyType.String));
-		_testOutputHelper.WriteLine(token);
+
 		// When
 		var result = JwtService.ValidateToken(token, JwtService.LoadPublicKey(_publicKey, LoadKeyType.String), out _);
 
@@ -150,6 +174,22 @@ MCowBQYDK2VwAyEAFYcbSrDaJytx/y7qxFZQpUGb+GORxSBWY2PrOo5fnIY=
 
 		// Then
 		Assert.True(result);
+	}
+
+	[Fact]
+	public void ValidateTokenWithCustomPayloadShouldSuccess()
+	{
+		// Given
+
+		// When
+		var result = JwtService.ValidateToken<CustomPayload>(
+			_customPayloadToken,
+			JwtService.LoadPublicKey(_publicKey),
+			out var payload);
+
+		// Then
+		Assert.True(result);
+		Assert.Equal("CustomClaimValue", payload.CustomClaim);
 	}
 
 	[Fact]
