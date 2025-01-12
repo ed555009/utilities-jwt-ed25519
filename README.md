@@ -72,6 +72,20 @@ dotnet add package Utilities.Jwt.Ed25519
 ```
 ## Using service
 
+### Define custom payload class
+
+Define your payload class by inheriting the `BaseJwtPayload` class.
+
+```csharp
+using System.Text.Json.Serialization;
+
+public class MyCustomPayload : BaseJwtPayload
+{
+	[JsonPropertyName("custom_claim")]
+	public string? CustomClaim { get; set; }
+}
+```
+
 ### Build token
 
 ```csharp
@@ -87,7 +101,7 @@ MC4CAQAwBQYDK2VwBCIEIBjirw/3PNIj5F6kfA100R6k2s9Wgb7yxYrVZbDfnOJf
 
 // prepare payload
 var now = DateTimeOffset.UtcNow;
-var payload = new JwtPayload
+var payload = new MyCustomPayload
 {
 	Subject = "Subject",
 	Issuer = "Issuer",
@@ -95,12 +109,9 @@ var payload = new JwtPayload
 	Expiration = now.AddMinutes(1).ToUnixTimeSeconds(),
 	IssuedAt = now.ToUnixTimeSeconds(),
 	NotBefore = now.ToUnixTimeSeconds(),
-	JwtId = Guid.NewGuid().ToString()
+	JwtId = Guid.NewGuid().ToString(),
+	CustomClaim = "CustomClaimValue"
 };
-
-// add custom claims (any type)
-payload.AddClaim("stringClaim", "claimValue");
-payload.AddClaim("numericClaim", 12345);
 
 // load private key from string
 var privateKey = JwtService.LoadPrivateKey(_privateKey);
@@ -132,52 +143,10 @@ var publicKey = JwtService.LoadPublicKey(_publicKey);
 var publicKey = JwtService.LoadPublicKey("path/to/public.pem", LoadKeyType.File);
 
 // validate token
-var isValid = JwtService.ValidateToken(token, publicKey, out var payload);
-```
-
-**Note:** `payload` is `Dictionary<string, object>?` type, `ValidateToken()` only validates the token `signature` and `algorithm`, it does not validate the token claims. You can validate the claims manually by checking the payload values.
-
-### Custom payload class
-
-You can use your custom payload class by inheriting the `BaseJwtPayload` class.
-
-```csharp
-using System.Text.Json.Serialization;
-
-public class MyCustomPayload : BaseJwtPayload
-{
-	[JsonPropertyName("custom_claim")]
-	public string? CustomClaim { get; set; }
-}
-```
-
-Then, use the custom payload class with the `JwtService`.
-
-```csharp
-// prepare payload
-var now = DateTimeOffset.UtcNow;
-var payload = new MyCustomPayload
-{
-	Subject = "Subject",
-	Issuer = "Issuer",
-	Audience = "Audience",
-	Expiration = now.AddMinutes(1).ToUnixTimeSeconds(),
-	IssuedAt = now.ToUnixTimeSeconds(),
-	NotBefore = now.ToUnixTimeSeconds(),
-	JwtId = Guid.NewGuid().ToString(),
-	CustomClaim = "CustomClaimValue"
-};
-```
-
-Finally, build and validate the token.
-
-```csharp
-// build token
-var token = JwtService.BuildToken<MyCustomPayload>(payload, privateKey);
-
-// validate token
 var isValid = JwtService.ValidateToken<MyCustomPayload>(token, publicKey, out var payload);
 ```
+
+**Note:** `ValidateToken()` only validates the token `signature` and `algorithm`, it does not validate the other token claims. You can validate the claims manually by checking the payload values.
 
 ## Benchmark
 
@@ -190,7 +159,5 @@ Apple M3 Pro, 1 CPU, 11 logical and 11 physical cores
 ```
 | Method                         | Mean     | Error    | StdDev   | Allocated |
 |------------------------------- |---------:|---------:|---------:|----------:|
-| BuildToken                     | 50.59 μs | 1.006 μs | 0.988 μs |  69.23 KB |
 | BuildTokenWithCustomPayload    | 52.34 μs | 1.018 μs | 1.288 μs |  68.09 KB |
-| ValidateToken                  | 69.59 μs | 1.359 μs | 2.270 μs | 136.41 KB |
 | ValidateTokenWithCustomPayload | 69.20 μs | 1.382 μs | 2.760 μs | 133.68 KB |

@@ -16,21 +16,6 @@ namespace Utilities.Jwt.Ed25519.Services
 	public class JwtService : IJwtService
 	{
 		/// <summary>
-		/// Builds a JWT token using the provided payload and Ed25519 private key parameters.
-		/// </summary>
-		/// <param name="jwtPayload">The payload to include in the JWT token.</param>
-		/// <param name="privateKeyParameters">The Ed25519 private key parameters used to sign the token.</param>
-		/// <returns>A JWT token as a string.</returns>
-		public static string BuildToken(JwtPayload jwtPayload, Ed25519PrivateKeyParameters privateKeyParameters)
-		{
-			var payload = Base64UrlEncode(Encoding.UTF8.GetBytes(jwtPayload.Export()));
-			var data = $"{GetEncodedHeader()}.{payload}";
-			var signature = GetEncodedSignature(data, privateKeyParameters);
-
-			return $"{data}.{signature}";
-		}
-
-		/// <summary>
 		/// Builds a JWT token from the given payload and private key parameters.
 		/// </summary>
 		/// <typeparam name="T">The type of the JWT payload, which must implement IBaseJwtPayload.</typeparam>
@@ -49,30 +34,6 @@ namespace Utilities.Jwt.Ed25519.Services
 			var signature = GetEncodedSignature(data, privateKeyParameters);
 
 			return $"{data}.{signature}";
-		}
-
-		/// <summary>
-		/// Validates a JWT token using the provided Ed25519 public key parameters.
-		/// </summary>
-		/// <param name="token">The JWT token to validate.</param>
-		/// <param name="publicKeyParameters">The Ed25519 public key parameters used to verify the token's signature.</param>
-		/// <param name="payload">The deserialized JWT payload if the token is valid; otherwise, null.</param>
-		/// <returns>True if the token is valid; otherwise, false.</returns>
-		public static bool ValidateToken(
-			string token,
-			Ed25519PublicKeyParameters publicKeyParameters,
-			out Dictionary<string, object>? payload)
-		{
-			var parts = ParseToken(token);
-			var data = $"{parts.Header}.{parts.Payload}";
-			var isValidSignature = VerifySignature(data, parts.DecodedSignature, publicKeyParameters);
-			var header = JsonSerializer.Deserialize<Dictionary<string, string>>(parts.DecodedHeader);
-			payload = JsonSerializer.Deserialize<Dictionary<string, object>>(parts.DecodedPayload)!;
-
-			return isValidSignature
-				&& header != null
-				&& header["alg"] == JwtHeader.Algorithm
-				&& header["typ"] == JwtHeader.Type;
 		}
 
 		/// <summary>
