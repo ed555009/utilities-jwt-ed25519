@@ -99,6 +99,15 @@ Version 10.0 replaces the static class `JwtService` with 2 interfaces. You can i
 | `JwtService.Base64UrlDecode(...)` | Removed |
 | `TokenParts` | Removed from the public API |
 
+### New dependencies
+
+Version 10.0 adds these dependencies for dependency injection and the clock:
+
+- `Microsoft.Extensions.DependencyInjection.Abstractions` 10.0.15
+- `Microsoft.Extensions.Options` 10.0.15
+- `Microsoft.Extensions.Options.DataAnnotations` 10.0.15
+- `Microsoft.Bcl.TimeProvider` 10.0.15
+
 ## Using service
 
 ### Define custom payload class
@@ -177,6 +186,91 @@ if (validator.TryValidateToken<MyCustomPayload>(token, publicKey, out var payloa
 - `TryValidateToken()` returns `false` for a malformed token. It does not throw an exception.
 - When `TryValidateToken()` returns `false`, `payload` is `null`. Do not use `payload` after a `false` result.
 - `TryValidateToken()` does not validate the other claims, such as `iss` and `aud`. Check these claims in the payload.
+
+## Dependency injection
+
+`AddJwtEd25519()` registers `IJwtSigner` and `IJwtValidator` as Scoped services. Add a key source for signing, validation, or both.
+
+### One fixed key
+
+```csharp
+using Utilities.Jwt.Ed25519.Extensions;
+
+builder.Services.AddJwtEd25519()
+	.AddSigning(o =>
+	{
+		o.PrivateKeyPem = builder.Configuration["Jwt:PrivateKeyPem"]!;
+		o.KeyId = "main";
+	})
+	.AddValidation(o =>
+	{
+		o.PublicKeyPem = builder.Configuration["Jwt:PublicKeyPem"]!;
+		o.KeyId = "main";
+	})
+	.ConfigureValidation(o => o.ClockSkew = TimeSpan.FromSeconds(30));
+```
+
+- The host checks the keys and the options at startup. A key that is not an Ed25519 key stops the host.
+- A service that only validates tokens calls `AddValidation()` only. That service never reads a private key.
+
+> **WARNING:** Read the PEM values from a secret store, for example AWS Secrets Manager. Do not put them in `appsettings.json`.
+
+### One key for each member or tenant
+
+Write a resolver when the key depends on the token. The resolver gets the `kid` header and the unverified `iss` and `sub` claims.
+
+```csharp
+public sealed class MemberKeyResolver(AppDbContext db) : IJwtKeyResolver
+{
+	private readonly AppDbContext _db = db;
+
+	public async ValueTask<JwtVerificationKey?> ResolvePublicKeyAsync(
+		JwtKeyResolutionContext context, CancellationToken cancellationToken)
+	{
+		var member = await _db.Members.SingleOrDefaultAsync(m => m.KeyId == context.KeyId, cancellationToken);
+
+		// Return null when no key matches. Do not return a fallback key.
+		return member == null
+			? null
+			: new JwtVerificationKey(Ed25519KeyLoader.LoadPublicKey(member.PublicKeyPem), member.Id);
+	}
+}
+
+builder.Services.AddJwtEd25519().AddValidation<MemberKeyResolver>();
+```
+
+- A custom resolver is Scoped. It can use a Scoped `DbContext`.
+- Set `ExpectedSubject` to bind the key to one member. The validator then rejects a token from member A with `sub` = member B.
+- A signing resolver (`IJwtSigningKeyResolver`) works the same way for signing. Register it with `AddSigning<TResolver>()`.
+
+### Validate with the resolver
+
+```csharp
+var result = await validator.ValidateTokenAsync<MyCustomPayload>(token, cancellationToken);
+
+if (!result.IsValid)
+{
+	// Log result.Error. Do not return result.Error to the client.
+	return Results.Unauthorized();
+}
+```
+
+### Options
+
+| Option | Default | Rule |
+|---|---|---|
+| `JwtValidationOptions.ClockSkew` | 0 | 0 to 5 minutes. The validator adds the value to `exp` and removes it from `nbf`. |
+| `JwtValidationOptions.RequireExpiration` | `false` | `true` rejects a token without `exp`. |
+| `StaticSigningKeyOptions.KeyId` | `null` | The signer writes the value to the `kid` header. |
+| `StaticValidationKeyOptions.KeyId` | `null` | When set, the validator accepts only tokens with the same `kid`. |
+
+### Validation rules
+
+- `alg` must be `EdDSA` and `typ` must be `JWT`. The token cannot select the algorithm.
+- The validator rejects a header with `crit`.
+- The validator never reads the `jwk`, `jku`, `x5u` or `x5c` headers. A token cannot give its own key.
+- `kid` must be 1 to 128 characters from `[A-Za-z0-9._:-]`. The validator checks the format before the resolver gets the value.
+- `JwtValidationResult.Error` shows why a token failed. Use it for logs and tests only. The value shows which key IDs exist.
 
 ## Benchmark
 
