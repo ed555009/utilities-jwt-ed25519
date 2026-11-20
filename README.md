@@ -70,6 +70,22 @@ Ed25519 is a modern, highly efficient digital signature scheme based on the **Ed
 ```bash
 dotnet add package Utilities.Jwt.Ed25519
 ```
+
+## Upgrade to 10.0
+
+Version 10.0 has breaking changes. The major version follows the .NET version.
+
+### Bouncy Castle package
+
+- Version 10.0 depends on `BouncyCastle.Cryptography`. Versions 8.x depend on `Portable.BouncyCastle`.
+- The key types `Ed25519PrivateKeyParameters` and `Ed25519PublicKeyParameters` move from the assembly `BouncyCastle.Crypto` to the assembly `BouncyCastle.Cryptography`. The namespace `Org.BouncyCastle` does not change.
+- Recompile your project against version 10.0. A binary that you compiled against version 8.x fails at run time.
+- Remove direct references to `Portable.BouncyCastle`. A project with both packages gets compiler error `CS0433`.
+
+### System.Text.Json
+
+- The minimum `System.Text.Json` version changes from 9.0.0 to 10.0.15.
+
 ## Using service
 
 ### Define custom payload class
