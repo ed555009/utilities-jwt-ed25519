@@ -49,7 +49,7 @@ Ed25519 is a modern, highly efficient digital signature scheme based on the **Ed
 
 | Feature               | Ed25519                          | RSA                            |
 |-----------------------|----------------------------------|---------------------------------|
-| **Algorithm**         | Edwards-curve Digital Signature Algorithm (ECDSA) | RSA (asymmetric encryption)    |
+| **Algorithm**         | Edwards-curve Digital Signature Algorithm (EdDSA) | RSA (asymmetric encryption)    |
 | **Key Size**          | Compact (32-byte private key, 32-byte public key) | Large (2048-bit or 4096-bit keys) |
 | **Performance**       | Faster signing and verification | Slower due to large key sizes  |
 | **Security**          | Equivalent security with smaller key size | Equivalent security, larger keys |
@@ -86,6 +86,19 @@ Version 10.0 has breaking changes. The major version follows the .NET version.
 
 - The minimum `System.Text.Json` version changes from 9.0.0 to 10.0.15.
 
+### API
+
+Version 10.0 replaces the static class `JwtService` with 2 interfaces. You can inject and mock the interfaces in your tests.
+
+| Version 8.x | Version 10.0 |
+|---|---|
+| `JwtService.BuildToken(payload, key)` | `IJwtSigner.BuildToken(payload, key)`, or `new JwtSigner().BuildToken(payload, key)` |
+| `JwtService.ValidateToken<T>(token, key, out var payload)` | `IJwtValidator.TryValidateToken<T>(token, key, out var payload)` |
+| `JwtService.LoadPrivateKey(...)` | `Ed25519KeyLoader.LoadPrivateKey(...)` |
+| `JwtService.LoadPublicKey(...)` | `Ed25519KeyLoader.LoadPublicKey(...)` |
+| `JwtService.Base64UrlDecode(...)` | Removed |
+| `TokenParts` | Removed from the public API |
+
 ## Using service
 
 ### Define custom payload class
@@ -95,7 +108,7 @@ Define your payload class by inheriting the `BaseJwtPayload` class.
 ```csharp
 using System.Text.Json.Serialization;
 
-public class MyCustomPayload : BaseJwtPayload
+public sealed class MyCustomPayload : BaseJwtPayload
 {
 	[JsonPropertyName("custom_claim")]
 	public string? CustomClaim { get; set; }
@@ -106,14 +119,8 @@ public class MyCustomPayload : BaseJwtPayload
 
 ```csharp
 using Utilities.Jwt.Ed25519.Enums;
-using Utilities.Jwt.Ed25519.Models;
+using Utilities.Jwt.Ed25519.Interfaces;
 using Utilities.Jwt.Ed25519.Services;
-
-// private key
-private readonly string _privateKey = @"-----BEGIN PRIVATE KEY-----
-MC4CAQAwBQYDK2VwBCIEIBjirw/3PNIj5F6kfA100R6k2s9Wgb7yxYrVZbDfnOJf
------END PRIVATE KEY-----
-";
 
 // prepare payload
 var now = DateTimeOffset.UtcNow;
@@ -129,45 +136,47 @@ var payload = new MyCustomPayload
 	CustomClaim = "CustomClaimValue"
 };
 
-// load private key from string
-var privateKey = JwtService.LoadPrivateKey(_privateKey);
+// load private key from a PEM string
+var privateKey = Ed25519KeyLoader.LoadPrivateKey(privateKeyPem);
 
-// or, load private key from file
-var privateKey = JwtService.LoadPrivateKey("path/to/private.pem", LoadKeyType.File);
+// or, load private key from a PEM file
+var privateKey = Ed25519KeyLoader.LoadPrivateKey("path/to/private.pem", LoadKeyType.File);
 
 // build token
-var token = JwtService.BuildToken(payload, privateKey);
+IJwtSigner signer = new JwtSigner();
+var token = signer.BuildToken(payload, privateKey);
 ```
+
+> **WARNING:** Do not write a private key in source code. Read the key from a secret store.
 
 ### Validate token
 
 ```csharp
 using Utilities.Jwt.Ed25519.Enums;
-using Utilities.Jwt.Ed25519.Models;
+using Utilities.Jwt.Ed25519.Interfaces;
 using Utilities.Jwt.Ed25519.Services;
 
-// public key
-private readonly string _publicKey = @"-----BEGIN PUBLIC KEY-----
-MCowBQYDK2VwAyEAFYcbSrDaJytx/y7qxFZQpUGb+GORxSBWY2PrOo5fnIY=
------END PUBLIC KEY-----
-";
+// load public key from a PEM string
+var publicKey = Ed25519KeyLoader.LoadPublicKey(publicKeyPem);
 
-// load public key from string
-var publicKey = JwtService.LoadPublicKey(_publicKey);
-
-// or, load public key from file
-var publicKey = JwtService.LoadPublicKey("path/to/public.pem", LoadKeyType.File);
+// or, load public key from a PEM file
+var publicKey = Ed25519KeyLoader.LoadPublicKey("path/to/public.pem", LoadKeyType.File);
 
 // validate token
-var isValid = JwtService.ValidateToken<MyCustomPayload>(token, publicKey, out var payload);
+IJwtValidator validator = new JwtValidator();
+
+if (validator.TryValidateToken<MyCustomPayload>(token, publicKey, out var payload))
+{
+	// payload is not null here
+}
 ```
 
-**Note:** `ValidateToken()` validates the token `signature`, the `alg` and `typ` headers, and the `exp` and `nbf` claims.
+**Note:** `TryValidateToken()` validates the token `signature`, the `alg` and `typ` headers, and the `exp` and `nbf` claims.
 
-- `ValidateToken()` returns `false` when the current time is at or after `exp`, or before `nbf`. A token without `exp` or `nbf` skips that check.
-- `ValidateToken()` returns `false` for a malformed token. It does not throw an exception.
-- When `ValidateToken()` returns `false`, `payload` is `null`. Do not use `payload` after a `false` result.
-- `ValidateToken()` does not validate the other claims, such as `iss` and `aud`. Check these claims in the payload.
+- `TryValidateToken()` returns `false` when the current time is at or after `exp`, or before `nbf`. A token without `exp` or `nbf` skips that check.
+- `TryValidateToken()` returns `false` for a malformed token. It does not throw an exception.
+- When `TryValidateToken()` returns `false`, `payload` is `null`. Do not use `payload` after a `false` result.
+- `TryValidateToken()` does not validate the other claims, such as `iss` and `aud`. Check these claims in the payload.
 
 ## Benchmark
 
