@@ -21,7 +21,7 @@ internal static class KeyIdFormat
 	/// <returns>True if the key ID has the format; otherwise, false.</returns>
 	public static bool IsValid(string? keyId)
 	{
-		if (string.IsNullOrEmpty(keyId) || keyId!.Length > MaxLength)
+		if (string.IsNullOrEmpty(keyId) || keyId.Length > MaxLength)
 			return false;
 
 		foreach (var c in keyId)
