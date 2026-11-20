@@ -1,49 +1,49 @@
+using System.Text;
 using Utilities.Jwt.Ed25519.Models;
 
 namespace Utilities.Jwt.Ed25519.Tests.Models;
 
 /// <summary>
 /// Tests for <see cref="TokenParts"/>.
-/// JwtService no longer uses TokenParts, but TokenParts stays public API. The tests pin its decode behavior.
+/// The validator uses TokenParts to split and decode a token. The tests pin the decoded parts
+/// and the false result for each malformed token.
 /// </summary>
 public class TokenPartsTests
 {
 	[Fact]
-	public void DecodedProperties_EncodedParts_ReturnDecodedValues()
+	public void TryParse_ValidToken_ReturnsTrueAndDecodedParts()
 	{
 		// Given
-		var parts = new TokenParts
-		{
-			Header = "eyJhbGciOiJFZERTQSIsInR5cCI6IkpXVCJ9",
-			Payload = "eyJzdWIiOiJ0ZXN0In0",
-			Signature = "AQID"
-		};
+		var token = "eyJhbGciOiJFZERTQSIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ0ZXN0In0.AQID";
 
 		// When
-		var header = parts.DecodedHeader;
-		var payload = parts.DecodedPayload;
-		var signature = parts.DecodedSignature;
+		var result = TokenParts.TryParse(token, out var parts);
 
 		// Then
-		Assert.Equal("{\"alg\":\"EdDSA\",\"typ\":\"JWT\"}", header);
-		Assert.Equal("{\"sub\":\"test\"}", payload);
-		Assert.Equal(new byte[] { 1, 2, 3 }, signature);
+		Assert.True(result);
+		Assert.NotNull(parts);
+		Assert.Equal("eyJhbGciOiJFZERTQSIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ0ZXN0In0", parts.SignedData);
+		Assert.Equal("{\"alg\":\"EdDSA\",\"typ\":\"JWT\"}", Encoding.UTF8.GetString(parts.Header));
+		Assert.Equal("{\"sub\":\"test\"}", Encoding.UTF8.GetString(parts.Payload));
+		Assert.Equal(new byte[] { 1, 2, 3 }, parts.Signature);
 	}
 
-	[Fact]
-	public void DecodedProperties_NullParts_ReturnEmptyValues()
+	[Theory]
+	[InlineData(null)]
+	[InlineData("")]
+	[InlineData("a.b")]
+	[InlineData("a.b.c.d")]
+	[InlineData("e30.e30.@@@@")]
+	[InlineData("e30=.e30.AQID")]
+	public void TryParse_MalformedToken_ReturnsFalseAndNull(string? token)
 	{
 		// Given
-		var parts = new TokenParts();
 
 		// When
-		var header = parts.DecodedHeader;
-		var payload = parts.DecodedPayload;
-		var signature = parts.DecodedSignature;
+		var result = TokenParts.TryParse(token, out var parts);
 
 		// Then
-		Assert.Equal("{}", header);
-		Assert.Equal("{}", payload);
-		Assert.Empty(signature);
+		Assert.False(result);
+		Assert.Null(parts);
 	}
 }

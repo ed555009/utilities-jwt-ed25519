@@ -11,6 +11,10 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "test", "test", "{DCDADD1D-6
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Utilities.Jwt.Ed25519.Tests", "test\Utilities.Jwt.Ed25519.Tests\Utilities.Jwt.Ed25519.Tests.csproj", "{3E70F5A7-435D-4926-A781-E8A66C03FD82}"
 EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "benchmark", "benchmark", "{09EED85C-BE3C-7566-DC0E-2E8E43466740}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Utilities.Jwt.Ed25519.Benchmarks", "benchmark\Utilities.Jwt.Ed25519.Benchmarks\Utilities.Jwt.Ed25519.Benchmarks.csproj", "{31ADFEF9-F87C-45AF-8828-60194F49D262}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -28,9 +32,14 @@ Global
 		{3E70F5A7-435D-4926-A781-E8A66C03FD82}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{3E70F5A7-435D-4926-A781-E8A66C03FD82}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{3E70F5A7-435D-4926-A781-E8A66C03FD82}.Release|Any CPU.Build.0 = Release|Any CPU
+		{31ADFEF9-F87C-45AF-8828-60194F49D262}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{31ADFEF9-F87C-45AF-8828-60194F49D262}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{31ADFEF9-F87C-45AF-8828-60194F49D262}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{31ADFEF9-F87C-45AF-8828-60194F49D262}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(NestedProjects) = preSolution
 		{FB4F10B7-E7E6-49AB-9FF8-42F69EFB17BA} = {FAF4D40F-E634-4AC0-B793-B6B7D8A48624}
 		{3E70F5A7-435D-4926-A781-E8A66C03FD82} = {DCDADD1D-62E5-4605-8BF2-BDA54D71E8E8}
+		{31ADFEF9-F87C-45AF-8828-60194F49D262} = {09EED85C-BE3C-7566-DC0E-2E8E43466740}
 	EndGlobalSection
 EndGlobal

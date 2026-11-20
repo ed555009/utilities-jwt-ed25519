@@ -1,44 +1,59 @@
-using System.Text;
+using System.Diagnostics.CodeAnalysis;
 using Utilities.Jwt.Ed25519.Services;
 
-namespace Utilities.Jwt.Ed25519.Models
+namespace Utilities.Jwt.Ed25519.Models;
+
+/// <summary>
+/// Holds the decoded parts of a JWT.
+/// </summary>
+/// <param name="signedData">The encoded header and payload, joined with a dot.</param>
+/// <param name="header">The decoded header bytes.</param>
+/// <param name="payload">The decoded payload bytes.</param>
+/// <param name="signature">The decoded signature bytes.</param>
+internal sealed class TokenParts(string signedData, byte[] header, byte[] payload, byte[] signature)
 {
 	/// <summary>
-	/// Represents the parts of a JWT (JSON Web Token).
+	/// Gets the encoded header and payload, joined with a dot.
 	/// </summary>
-	public class TokenParts
+	public string SignedData { get; } = signedData;
+
+	/// <summary>
+	/// Gets the decoded header bytes.
+	/// </summary>
+	public byte[] Header { get; } = header;
+
+	/// <summary>
+	/// Gets the decoded payload bytes.
+	/// </summary>
+	public byte[] Payload { get; } = payload;
+
+	/// <summary>
+	/// Gets the decoded signature bytes.
+	/// </summary>
+	public byte[] Signature { get; } = signature;
+
+	/// <summary>
+	/// Splits a JWT and decodes its header, payload, and signature.
+	/// </summary>
+	/// <param name="token">The JWT to decode.</param>
+	/// <param name="parts">The decoded parts when the token is valid; otherwise, <see langword="null"/>.</param>
+	/// <returns>True if the token has 3 Base64 URL parts; otherwise, false.</returns>
+	public static bool TryParse(string? token, [NotNullWhen(true)] out TokenParts? parts)
 	{
-		/// <summary>
-		/// Gets or sets the encoded header of the JWT.
-		/// </summary>
-		public string? Header { get; set; }
+		parts = null;
 
-		/// <summary>
-		/// Gets or sets the encoded payload of the JWT.
-		/// </summary>
-		public string? Payload { get; set; }
+		if (string.IsNullOrEmpty(token))
+			return false;
 
-		/// <summary>
-		/// Gets or sets the encoded signature of the JWT.
-		/// </summary>
-		public string? Signature { get; set; }
+		var segments = token!.Split('.');
 
-		/// <summary>
-		/// Gets the decoded header of the JWT.
-		/// </summary>
-		public string DecodedHeader =>
-			Header == null ? "{}" : Encoding.UTF8.GetString(JwtService.Base64UrlDecode(Header));
+		if (segments.Length != 3
+			|| !Base64Url.TryDecode(segments[0], out var header)
+			|| !Base64Url.TryDecode(segments[1], out var payload)
+			|| !Base64Url.TryDecode(segments[2], out var signature))
+			return false;
 
-		/// <summary>
-		/// Gets the decoded payload of the JWT.
-		/// </summary>
-		public string DecodedPayload =>
-			Payload == null ? "{}" : Encoding.UTF8.GetString(JwtService.Base64UrlDecode(Payload));
-
-		/// <summary>
-		/// Gets the decoded signature of the JWT.
-		/// </summary>
-		public byte[] DecodedSignature =>
-			Signature == null ? new byte[0] : JwtService.Base64UrlDecode(Signature);
+		parts = new TokenParts($"{segments[0]}.{segments[1]}", header, payload, signature);
+		return true;
 	}
 }
