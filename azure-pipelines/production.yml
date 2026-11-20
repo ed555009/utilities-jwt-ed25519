@@ -37,13 +37,15 @@ stages:
               versionEnvVar: Build.Version
 
           # upload package
-          - task: NuGetCommand@2
+          # Use dotnet nuget push. NuGetCommand@2 needs mono, and ubuntu-latest has no mono.
+          # Send the API key through env. Do not write the key in the script text.
+          - script: >
+              dotnet nuget push "$(Build.ArtifactStagingDirectory)/*.nupkg"
+              --api-key "$NUGET_API_KEY"
+              --source https://api.nuget.org/v3/index.json
             displayName: Upload package to NuGet
-            inputs:
-              command: push
-              searchPatternPush: $(Build.ArtifactStagingDirectory)/**/*.nupkg;!$(Build.ArtifactStagingDirectory)/**/*.Tests.nupkg;!$(Build.ArtifactStagingDirectory)/**/*.symbols.nupkg
-              nuGetFeedType: external
-              publishFeedCredentials: Nuget-github
+            env:
+              NUGET_API_KEY: $(Nuget.ApiKey)
 
   # Create tag
   - deployment: CreateTag
