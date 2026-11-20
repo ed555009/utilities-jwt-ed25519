@@ -146,7 +146,12 @@ var publicKey = JwtService.LoadPublicKey("path/to/public.pem", LoadKeyType.File)
 var isValid = JwtService.ValidateToken<MyCustomPayload>(token, publicKey, out var payload);
 ```
 
-**Note:** `ValidateToken()` only validates the token `signature` and `algorithm`, it does not validate the other token claims. You can validate the claims manually by checking the payload values.
+**Note:** `ValidateToken()` validates the token `signature`, the `alg` and `typ` headers, and the `exp` and `nbf` claims.
+
+- `ValidateToken()` returns `false` when the current time is at or after `exp`, or before `nbf`. A token without `exp` or `nbf` skips that check.
+- `ValidateToken()` returns `false` for a malformed token. It does not throw an exception.
+- When `ValidateToken()` returns `false`, `payload` is `null`. Do not use `payload` after a `false` result.
+- `ValidateToken()` does not validate the other claims, such as `iss` and `aud`. Check these claims in the payload.
 
 ## Benchmark
 

@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 using System.IO;
 using System.Text;
 using System.Text.Json;
@@ -44,19 +43,41 @@ namespace Utilities.Jwt.Ed25519.Services
 		/// <param name="publicKeyParameters">The Ed25519 public key parameters used to verify the token's signature.</param>
 		/// <param name="payload">The deserialized JWT payload if the token is valid; otherwise, the default value of <typeparamref name="T"/>.</param>
 		/// <returns>True if the token is valid; otherwise, false.</returns>
+		/// <remarks>
+		/// The method returns false and does not throw when the token is malformed.
+		/// The method returns false when the current time is at or after <c>exp</c>, or before <c>nbf</c>.
+		/// The method does not check the other claims.
+		/// </remarks>
 		public static bool ValidateToken<T>(string token, Ed25519PublicKeyParameters publicKeyParameters, out T payload)
 			where T : IBaseJwtPayload
 		{
-			var parts = ParseToken(token);
-			var data = $"{parts.Header}.{parts.Payload}";
-			var isValidSignature = VerifySignature(data, parts.DecodedSignature, publicKeyParameters);
-			var header = JsonSerializer.Deserialize<Dictionary<string, string>>(parts.DecodedHeader);
-			payload = JsonSerializer.Deserialize<T>(parts.DecodedPayload)!;
+			payload = default!;
 
-			return isValidSignature
-				&& header != null
-				&& header["alg"] == JwtHeader.Algorithm
-				&& header["typ"] == JwtHeader.Type;
+			if (!TryDecodeToken(token, out var signedData, out var headerBytes, out var payloadBytes, out var signature))
+				return false;
+
+			// Verify the signature first. Do not parse untrusted JSON before this check.
+			if (!VerifySignature(signedData, signature, publicKeyParameters))
+				return false;
+
+			try
+			{
+				if (!IsValidHeader(headerBytes) || !IsWithinLifetime(payloadBytes, DateTimeOffset.UtcNow))
+					return false;
+
+				var result = JsonSerializer.Deserialize<T>(payloadBytes);
+
+				if (result == null)
+					return false;
+
+				// Set the payload only after all checks pass. A false result never carries claims.
+				payload = result;
+				return true;
+			}
+			catch (JsonException)
+			{
+				return false;
+			}
 		}
 
 		/// <summary>
@@ -98,27 +119,139 @@ namespace Utilities.Jwt.Ed25519.Services
 		}
 
 		/// <summary>
-		/// Parses a JWT token into its constituent parts: header, payload, and signature.
+		/// Splits a JWT token and decodes its header, payload, and signature.
 		/// </summary>
-		/// <param name="token">The JWT token to parse.</param>
-		/// <returns>A <see cref="TokenParts"/> object containing the header, payload, and signature of the token.</returns>
-		/// <exception cref="InvalidDataException">
-		/// Thrown if the token format is invalid or if any part of the token (header, payload, or signature) is null.
-		/// </exception>
-		static TokenParts ParseToken(string token)
+		/// <param name="token">The JWT token to decode.</param>
+		/// <param name="signedData">The encoded header and payload, joined with a dot.</param>
+		/// <param name="header">The decoded header bytes.</param>
+		/// <param name="payload">The decoded payload bytes.</param>
+		/// <param name="signature">The decoded signature bytes.</param>
+		/// <returns>True if the token has 3 Base64 URL encoded parts; otherwise, false.</returns>
+		private static bool TryDecodeToken(
+			string token,
+			out string signedData,
+			out byte[] header,
+			out byte[] payload,
+			out byte[] signature)
 		{
+			signedData = string.Empty;
+			header = payload = signature = Array.Empty<byte>();
+
+			if (string.IsNullOrEmpty(token))
+				return false;
+
 			var parts = token.Split('.');
 
-			if (parts.Length != 3)
-				throw new InvalidDataException("Invalid JWT token format");
+			if (parts.Length != 3
+				|| !TryBase64UrlDecode(parts[0], out header)
+				|| !TryBase64UrlDecode(parts[1], out payload)
+				|| !TryBase64UrlDecode(parts[2], out signature))
+				return false;
 
-			return new TokenParts
-			{
-				Header = parts[0],
-				Payload = parts[1],
-				Signature = parts[2]
-			};
+			signedData = $"{parts[0]}.{parts[1]}";
+			return true;
 		}
+
+		/// <summary>
+		/// Decodes a Base64 URL encoded string without padding.
+		/// </summary>
+		/// <param name="data">The Base64 URL encoded string to decode.</param>
+		/// <param name="bytes">The decoded bytes.</param>
+		/// <returns>True if the string is valid Base64 URL; otherwise, false.</returns>
+		private static bool TryBase64UrlDecode(string data, out byte[] bytes)
+		{
+			bytes = Array.Empty<byte>();
+
+			// Accept only the Base64 URL alphabet (RFC 7515 section 2).
+			// The check also keeps the signed data ASCII. VerifySignature uses the character count as the byte count.
+			foreach (var c in data)
+			{
+				if (!(c >= 'A' && c <= 'Z' || c >= 'a' && c <= 'z' || c >= '0' && c <= '9' || c == '-' || c == '_'))
+					return false;
+			}
+
+			var base64 = data
+				.Replace('-', '+')
+				.Replace('_', '/')
+				.PadRight(data.Length + (4 - data.Length % 4) % 4, '=');
+			var buffer = new byte[base64.Length / 4 * 3];
+
+			if (!Convert.TryFromBase64String(base64, buffer, out var written))
+				return false;
+
+			bytes = buffer.AsSpan(0, written).ToArray();
+			return true;
+		}
+
+		/// <summary>
+		/// Checks that the JWT header is a JSON object with the expected algorithm and type.
+		/// </summary>
+		/// <param name="header">The decoded header bytes.</param>
+		/// <returns>True if <c>alg</c> is EdDSA and <c>typ</c> is JWT; otherwise, false.</returns>
+		/// <exception cref="JsonException">Thrown when the header is not valid JSON.</exception>
+		private static bool IsValidHeader(byte[] header)
+		{
+			using var document = JsonDocument.Parse(header);
+			var root = document.RootElement;
+
+			return root.ValueKind == JsonValueKind.Object
+				&& HasStringValue(root, "alg", JwtHeader.Algorithm)
+				&& HasStringValue(root, "typ", JwtHeader.Type);
+		}
+
+		/// <summary>
+		/// Checks the <c>exp</c> and <c>nbf</c> claims against the current time.
+		/// </summary>
+		/// <param name="payload">The decoded payload bytes.</param>
+		/// <param name="now">The current time.</param>
+		/// <returns>True if the token is in its lifetime; otherwise, false.</returns>
+		/// <exception cref="JsonException">Thrown when the payload is not valid JSON.</exception>
+		private static bool IsWithinLifetime(byte[] payload, DateTimeOffset now)
+		{
+			using var document = JsonDocument.Parse(payload);
+			var root = document.RootElement;
+
+			if (root.ValueKind != JsonValueKind.Object)
+				return false;
+
+			// Use milliseconds. NumericDate values can have a fraction (RFC 7519 section 2).
+			var seconds = now.ToUnixTimeMilliseconds() / 1000d;
+
+			// RFC 7519 makes exp and nbf optional. Check each claim only when the token has it.
+			if (root.TryGetProperty("exp", out var exp)
+				&& (!TryGetNumericDate(exp, out var expiration) || seconds >= expiration))
+				return false;
+
+			if (root.TryGetProperty("nbf", out var nbf)
+				&& (!TryGetNumericDate(nbf, out var notBefore) || seconds < notBefore))
+				return false;
+
+			return true;
+		}
+
+		/// <summary>
+		/// Reads a JSON number as a NumericDate value.
+		/// </summary>
+		/// <param name="element">The JSON element to read.</param>
+		/// <param name="value">The number of seconds since the Unix epoch.</param>
+		/// <returns>True if the element is a JSON number; otherwise, false.</returns>
+		private static bool TryGetNumericDate(JsonElement element, out double value)
+		{
+			value = 0;
+			return element.ValueKind == JsonValueKind.Number && element.TryGetDouble(out value);
+		}
+
+		/// <summary>
+		/// Checks that a JSON object has a string property with the expected value.
+		/// </summary>
+		/// <param name="element">The JSON object.</param>
+		/// <param name="name">The property name.</param>
+		/// <param name="expected">The expected string value.</param>
+		/// <returns>True if the property is a string with the expected value; otherwise, false.</returns>
+		private static bool HasStringValue(JsonElement element, string name, string expected) =>
+			element.TryGetProperty(name, out var value)
+			&& value.ValueKind == JsonValueKind.String
+			&& value.GetString() == expected;
 
 		/// <summary>
 		/// Encodes the JWT header to a Base64 URL encoded string.
