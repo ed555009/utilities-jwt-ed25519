@@ -59,7 +59,7 @@ stages:
       inputs:
         command: 'custom'
         custom: 'sonarscanner'
-        arguments: 'begin /o:$(Sonarqube.Organization) /k:$(Sonarqube.ProjectKey) /d:sonar.host.url=$(Sonarqube.Host) /d:sonar.login=$(Sonarqube.Token) /d:sonar.cs.opencover.reportsPaths=**/coverage.opencover.xml /v:$(Build.Version)'
+        arguments: 'begin /o:$(Sonarqube.Organization) /k:$(Sonarqube.ProjectKey) /d:sonar.host.url=$(Sonarqube.Host) /d:sonar.token=$(Sonarqube.Token) /d:sonar.cs.opencover.reportsPaths=**/coverage.opencover.xml /v:$(Build.Version)'
 
     # build for code scanning
     - task: DotNetCoreCLI@2
@@ -104,6 +104,6 @@ stages:
       inputs:
         command: 'custom'
         custom: 'sonarscanner'
-        arguments: 'end /d:sonar.login=$(Sonarqube.Token)'
+        arguments: 'end /d:sonar.token=$(Sonarqube.Token)'
 
 ...
