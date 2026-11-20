@@ -25,3 +25,12 @@ dotnet_naming_symbols.private_fields.applicable_accessibilities = private
 
 dotnet_naming_style.prefix_underscore.capitalization = camel_case
 dotnet_naming_style.prefix_underscore.required_prefix = _
+
+# Write access modifiers explicitly, also private.
+# The build reads the IDE0040 severity, not the severity suffix of the option.
+dotnet_style_require_accessibility_modifiers = always:warning
+dotnet_diagnostic.IDE0040.severity = warning
+
+# Seal internal types that have no subclasses.
+# NOTE: CA1852 does not run when the assembly has InternalsVisibleTo. Review internal types manually.
+dotnet_diagnostic.CA1852.severity = warning
