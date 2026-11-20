@@ -7,6 +7,8 @@ stages:
   displayName: Production release
   variables:
   - group: utilities-jwt-ed25519
+  # The Nuget group holds Nuget.ApiKey for the upload step.
+  - group: Nuget
 
   # Pack and upload package to NuGet
   jobs:
