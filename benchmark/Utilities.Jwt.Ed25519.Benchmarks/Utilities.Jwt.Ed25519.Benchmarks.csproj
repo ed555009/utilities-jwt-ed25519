@@ -6,6 +6,8 @@
     <Nullable>enable</Nullable>
     <IsPackable>false</IsPackable>
     <Optimize>true</Optimize>
+    <!-- The SonarScanner for .NET skips this project. The benchmark code is not part of the package. -->
+    <SonarQubeExclude>true</SonarQubeExclude>
     <!-- Keep net8.0 to compare with the 8.x benchmark results. .NET 8 support ended on 2026-11-10. -->
     <SuppressTfmSupportBuildWarnings>true</SuppressTfmSupportBuildWarnings>
   </PropertyGroup>

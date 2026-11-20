@@ -45,7 +45,7 @@ internal sealed class TokenParts(string signedData, byte[] header, byte[] payloa
 		if (string.IsNullOrEmpty(token))
 			return false;
 
-		var segments = token!.Split('.');
+		var segments = token.Split('.');
 
 		if (segments.Length != 3
 			|| !Base64Url.TryDecode(segments[0], out var header)

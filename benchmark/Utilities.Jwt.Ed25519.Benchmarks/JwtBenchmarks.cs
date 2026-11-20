@@ -1,5 +1,10 @@
 using BenchmarkDotNet.Attributes;
+using Org.BouncyCastle.Crypto.Generators;
 using Org.BouncyCastle.Crypto.Parameters;
+using Org.BouncyCastle.OpenSsl;
+using Org.BouncyCastle.Pkcs;
+using Org.BouncyCastle.Security;
+using Org.BouncyCastle.X509;
 using Utilities.Jwt.Ed25519.Interfaces;
 using Utilities.Jwt.Ed25519.Models;
 using Utilities.Jwt.Ed25519.Services;
@@ -17,20 +22,9 @@ namespace Utilities.Jwt.Ed25519.Benchmarks;
 [MemoryDiagnoser]
 public class JwtBenchmarks
 {
-	// NOTE: These keys are benchmark keys only. No system uses them.
-	private const string PrivateKeyPem = """
-		-----BEGIN PRIVATE KEY-----
-		MC4CAQAwBQYDK2VwBCIEIBjirw/3PNIj5F6kfA100R6k2s9Wgb7yxYrVZbDfnOJf
-		-----END PRIVATE KEY-----
-		""";
-
-	private const string PublicKeyPem = """
-		-----BEGIN PUBLIC KEY-----
-		MCowBQYDK2VwAyEAFYcbSrDaJytx/y7qxFZQpUGb+GORxSBWY2PrOo5fnIY=
-		-----END PUBLIC KEY-----
-		""";
-
 	private readonly JwtSigner _signer = new();
+	private string _privateKeyPem = null!;
+	private string _publicKeyPem = null!;
 	private Ed25519PrivateKeyParameters _privateKey = null!;
 	private Ed25519PublicKeyParameters _publicKey = null!;
 	private JwtValidator _validator = null!;
@@ -38,11 +32,22 @@ public class JwtBenchmarks
 	private string _token = null!;
 
 	/// <summary>
-	/// Loads the keys and builds the token that the validation benchmarks use.
+	/// Generates the keys and builds the token that the validation benchmarks use.
 	/// </summary>
+	/// <remarks>
+	/// The setup generates a new key pair in each run. Do not put a private key in the source code.
+	/// </remarks>
 	[GlobalSetup]
 	public void Setup()
 	{
+		var generator = new Ed25519KeyPairGenerator();
+		generator.Init(new Ed25519KeyGenerationParameters(new SecureRandom()));
+		var keyPair = generator.GenerateKeyPair();
+
+		// The LoadKeyEachCall benchmarks parse PEM text. The 8.x README results use this method.
+		_privateKeyPem = ToPem(PrivateKeyInfoFactory.CreatePrivateKeyInfo(keyPair.Private));
+		_publicKeyPem = ToPem(SubjectPublicKeyInfoFactory.CreateSubjectPublicKeyInfo(keyPair.Public));
+
 		var now = DateTimeOffset.UtcNow;
 
 		// Set exp in the future. The validation benchmarks must run all checks, not stop at the lifetime check.
@@ -58,8 +63,8 @@ public class JwtBenchmarks
 			CustomClaim = "CustomClaimValue"
 		};
 
-		_privateKey = Ed25519KeyLoader.LoadPrivateKey(PrivateKeyPem);
-		_publicKey = Ed25519KeyLoader.LoadPublicKey(PublicKeyPem);
+		_privateKey = Ed25519KeyLoader.LoadPrivateKey(_privateKeyPem);
+		_publicKey = Ed25519KeyLoader.LoadPublicKey(_publicKeyPem);
 		_validator = new JwtValidator(new FixedKeyResolver(new JwtVerificationKey(_publicKey)), null, null);
 		_token = _signer.BuildToken(_payload, _privateKey);
 
@@ -86,14 +91,14 @@ public class JwtBenchmarks
 	/// </summary>
 	[Benchmark]
 	public string BuildToken_LoadKeyEachCall() =>
-		_signer.BuildToken(_payload, Ed25519KeyLoader.LoadPrivateKey(PrivateKeyPem));
+		_signer.BuildToken(_payload, Ed25519KeyLoader.LoadPrivateKey(_privateKeyPem));
 
 	/// <summary>
 	/// Loads the public key and validates a token.
 	/// </summary>
 	[Benchmark]
 	public bool ValidateToken_LoadKeyEachCall() =>
-		_validator.TryValidateToken<BenchmarkPayload>(_token, Ed25519KeyLoader.LoadPublicKey(PublicKeyPem), out _);
+		_validator.TryValidateToken<BenchmarkPayload>(_token, Ed25519KeyLoader.LoadPublicKey(_publicKeyPem), out _);
 
 	/// <summary>
 	/// Validates a token with the key from a resolver.
@@ -101,6 +106,21 @@ public class JwtBenchmarks
 	[Benchmark]
 	public bool ValidateTokenAsync_Resolver() =>
 		_validator.ValidateTokenAsync<BenchmarkPayload>(_token, CancellationToken.None).AsTask().GetAwaiter().GetResult().IsValid;
+
+	/// <summary>
+	/// Writes a key structure to PEM text.
+	/// </summary>
+	/// <param name="key">The key structure to write.</param>
+	/// <returns>The PEM text.</returns>
+	private static string ToPem(object key)
+	{
+		using var writer = new StringWriter();
+		var pemWriter = new PemWriter(writer);
+		pemWriter.WriteObject(key);
+		pemWriter.Writer.Flush();
+
+		return writer.ToString();
+	}
 
 	/// <summary>
 	/// Gives one key that the setup loaded.
