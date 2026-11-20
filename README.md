@@ -274,14 +274,58 @@ if (!result.IsValid)
 
 ## Benchmark
 
+The benchmark project is in `benchmark/Utilities.Jwt.Ed25519.Benchmarks`. Run it with this command:
+
+```bash
+cd benchmark/Utilities.Jwt.Ed25519.Benchmarks
+dotnet run -c Release -f net10.0 -- --filter '*' --runtimes net8.0 net10.0
 ```
-BenchmarkDotNet v0.14.0, macOS Sonoma 14.3 (23D56) [Darwin 23.3.0]
+
+The benchmark has 2 scenarios:
+
+- `PreloadedKey`: the benchmark loads the key once. The dependency injection registration of version 10.0 loads the key once too.
+- `LoadKeyEachCall`: the benchmark parses the PEM key in each call. The 8.x results used this scenario.
+
+### Version 10.0
+
+```
+BenchmarkDotNet v0.15.8, macOS 27.0.1 (26A434) [Darwin 27.0.0]
 Apple M3 Pro, 1 CPU, 11 logical and 11 physical cores
-.NET SDK 8.0.302
-  [Host]     : .NET 8.0.6 (8.0.624.26715), Arm64 RyuJIT AdvSIMD
-  DefaultJob : .NET 8.0.6 (8.0.624.26715), Arm64 RyuJIT AdvSIMD
+.NET SDK 11.0.100
+  [Host]    : .NET 10.0.15 (10.0.15, 10.0.1526.53008), Arm64 RyuJIT armv8.0-a
+  .NET 10.0 : .NET 10.0.15 (10.0.15, 10.0.1526.53008), Arm64 RyuJIT armv8.0-a
+  .NET 8.0  : .NET 8.0.6 (8.0.6, 8.0.624.26715), Arm64 RyuJIT armv8.0-a
 ```
-| Method                         | Mean     | Error    | StdDev   | Allocated |
-|------------------------------- |---------:|---------:|---------:|----------:|
-| BuildTokenWithCustomPayload    | 52.34 μs | 1.018 μs | 1.288 μs |  68.09 KB |
-| ValidateTokenWithCustomPayload | 69.20 μs | 1.382 μs | 2.760 μs | 133.68 KB |
+
+| Method                        | Runtime   | Mean     | Error    | StdDev   | Allocated |
+|------------------------------ |---------- |---------:|---------:|---------:|----------:|
+| BuildToken_PreloadedKey       | .NET 10.0 | 23.42 μs | 0.464 μs | 0.587 μs |   6.98 KB |
+| BuildToken_PreloadedKey       | .NET 8.0  | 24.02 μs | 0.125 μs | 0.111 μs |   6.99 KB |
+| ValidateToken_PreloadedKey    | .NET 10.0 | 42.62 μs | 0.844 μs | 1.183 μs |   9.73 KB |
+| ValidateToken_PreloadedKey    | .NET 8.0  | 44.53 μs | 0.655 μs | 0.612 μs |   9.92 KB |
+| BuildToken_LoadKeyEachCall    | .NET 10.0 | 46.74 μs | 0.604 μs | 0.565 μs |  15.96 KB |
+| BuildToken_LoadKeyEachCall    | .NET 8.0  | 47.84 μs | 0.098 μs | 0.092 μs |  15.96 KB |
+| ValidateToken_LoadKeyEachCall | .NET 10.0 | 50.59 μs | 0.952 μs | 1.019 μs |  17.13 KB |
+| ValidateToken_LoadKeyEachCall | .NET 8.0  | 52.60 μs | 0.886 μs | 0.828 μs |  17.13 KB |
+| ValidateTokenAsync_Resolver   | .NET 10.0 | 43.76 μs | 0.088 μs | 0.082 μs |  10.13 KB |
+| ValidateTokenAsync_Resolver   | .NET 8.0  | 44.10 μs | 0.430 μs | 0.402 μs |   9.98 KB |
+
+### Comparison with version 8.0.973
+
+The same machine ran version 8.0.973 with the same benchmark scenarios on the same day.
+
+| Operation | Runtime | Scenario | 8.0.973 | 10.0 | Time | Memory |
+|---|---|---|---|---|---:|---:|
+| Build | .NET 8.0 | LoadKeyEachCall | 53.60 μs / 68.00 KB | 47.84 μs / 15.96 KB | -10.7% | -76.5% |
+| Validate | .NET 8.0 | LoadKeyEachCall | 70.31 μs / 134.77 KB | 52.60 μs / 17.13 KB | -25.2% | -87.3% |
+| Build | .NET 10.0 | LoadKeyEachCall | 51.04 μs / 67.54 KB | 46.74 μs / 15.96 KB | -8.4% | -76.4% |
+| Validate | .NET 10.0 | LoadKeyEachCall | 67.61 μs / 133.67 KB | 50.59 μs / 17.13 KB | -25.2% | -87.2% |
+| Build | .NET 8.0 | PreloadedKey | 26.23 μs / 30.03 KB | 24.02 μs / 6.99 KB | -8.4% | -76.7% |
+| Validate | .NET 8.0 | PreloadedKey | 65.96 μs / 122.35 KB | 44.53 μs / 9.92 KB | -32.5% | -91.9% |
+| Build | .NET 10.0 | PreloadedKey | 24.16 μs / 29.75 KB | 23.42 μs / 6.98 KB | -3.1% | -76.5% |
+| Validate | .NET 10.0 | PreloadedKey | 63.20 μs / 121.48 KB | 42.62 μs / 9.73 KB | -32.6% | -92.0% |
+
+- Validation takes 25% to 33% less time. Each operation allocates 76% to 92% less memory.
+- Load the key once. A preloaded key decreases the build time from about 47 μs to about 24 μs.
+- `ValidateTokenAsync` with a key resolver takes about 1.2 μs more than `TryValidateToken`.
+- Version 8.0.1058 adds the `exp`, `nbf` and format checks. Its results differ from 8.0.973 by -1% to +3%.
