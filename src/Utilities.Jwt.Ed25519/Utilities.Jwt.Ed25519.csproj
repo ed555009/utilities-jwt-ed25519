@@ -23,6 +23,10 @@
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="BouncyCastle.Cryptography" Version="2.7.0" />
+    <PackageReference Include="Microsoft.Bcl.TimeProvider" Version="10.0.15" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.15" />
+    <PackageReference Include="Microsoft.Extensions.Options" Version="10.0.15" />
+    <PackageReference Include="Microsoft.Extensions.Options.DataAnnotations" Version="10.0.15" />
     <PackageReference Include="System.Text.Json" Version="10.0.15" />
   </ItemGroup>
 </Project>

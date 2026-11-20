@@ -1,31 +1,61 @@
+using System.IO;
+using System.Text;
 using System.Text.Json;
 
 namespace Utilities.Jwt.Ed25519.Models;
 
 /// <summary>
-/// Represents the header of a JWT (JSON Web Token) with predefined algorithm and type.
+/// The JOSE header of a JWT that this package builds.
 /// </summary>
-public static class JwtHeader
+/// <param name="keyId">The value of the <c>kid</c> header, or <see langword="null"/> for a token without <c>kid</c>.</param>
+public sealed class JwtHeader(string? keyId = null)
 {
 	/// <summary>
-	/// Gets the algorithm used for the JWT, which is "EdDSA".
+	/// The algorithm of every token that this package builds and accepts.
 	/// </summary>
-	public static string Algorithm => "EdDSA";
+	public const string EdDsaAlgorithm = "EdDSA";
 
 	/// <summary>
-	/// Gets the type of the token, which is "JWT".
+	/// The token type of every token that this package builds and accepts.
 	/// </summary>
-	public static string Type => "JWT";
+	public const string JwtType = "JWT";
 
 	/// <summary>
-	/// Exports the JWT header as a JSON string.
+	/// Gets the value of the <c>alg</c> header, which is EdDSA.
 	/// </summary>
-	/// <returns>A JSON string representing the JWT header.</returns>
-	public static string Export() =>
-		JsonSerializer.Serialize(
-			new
-			{
-				alg = Algorithm,
-				typ = Type
-			});
+	public string Algorithm => EdDsaAlgorithm;
+
+	/// <summary>
+	/// Gets the value of the <c>typ</c> header, which is JWT.
+	/// </summary>
+	public string Type => JwtType;
+
+	/// <summary>
+	/// Gets the value of the <c>kid</c> header, or <see langword="null"/> when the token has no <c>kid</c>.
+	/// </summary>
+	public string? KeyId { get; } = keyId;
+
+	/// <summary>
+	/// Exports the header as a JSON string.
+	/// </summary>
+	/// <returns>The header JSON. The <c>kid</c> property is present only when <see cref="KeyId"/> is not null.</returns>
+	public string Export()
+	{
+		using var stream = new MemoryStream();
+
+		using (var writer = new Utf8JsonWriter(stream))
+		{
+			// Keep the order alg, typ. A token without kid then stays the same as in version 8.x.
+			writer.WriteStartObject();
+			writer.WriteString("alg", Algorithm);
+			writer.WriteString("typ", Type);
+
+			if (KeyId != null)
+				writer.WriteString("kid", KeyId);
+
+			writer.WriteEndObject();
+		}
+
+		return Encoding.UTF8.GetString(stream.ToArray());
+	}
 }

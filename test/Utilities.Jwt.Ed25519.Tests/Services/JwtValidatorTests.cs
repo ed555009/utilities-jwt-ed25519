@@ -7,10 +7,14 @@ namespace Utilities.Jwt.Ed25519.Tests.Services;
 
 /// <summary>
 /// Tests for <see cref="JwtValidator"/>.
-/// The tests pin the security controls: signature, header, lifetime, and malformed input.
+/// The tests pin the security controls: signature, header, lifetime, key selection, and malformed input.
 /// A regression in these controls lets a client use an expired, forged, or malformed token.
 /// </summary>
-public class JwtValidatorTests
+/// <remarks>
+/// JwtValidatorTests.Async.cs has the tests for ValidateTokenAsync.
+/// JwtValidatorTests.Lifetime.cs has the time boundary tests.
+/// </remarks>
+public partial class JwtValidatorTests
 {
 	private readonly JwtSigner _signer = new();
 	private readonly JwtValidator _validator = new();
