@@ -85,7 +85,8 @@ jobs:
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           SONAR_ORGANIZATION: ${{ vars.SONAR_ORGANIZATION }}
-          SONAR_PROJECT_KEY: ${{ vars.SONAR_PROJECT_KEY }}
+          # The SonarCloud project key is the repo name.
+          SONAR_PROJECT_KEY: ${{ github.event.repository.name }}
         run: >
           dotnet sonarscanner begin
           /o:"$SONAR_ORGANIZATION"
