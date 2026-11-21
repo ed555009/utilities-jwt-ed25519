@@ -1,7 +1,7 @@
 # Utilities.Jwt.Ed25519
 
 [![GitHub](https://img.shields.io/github/license/ed555009/utilities-jwt-ed25519)](LICENSE)
-![Build Status](https://dev.azure.com/edwang/github/_apis/build/status/utilities-jwt-ed25519?branchName=main)
+[![Build Status](https://github.com/ed555009/utilities-jwt-ed25519/actions/workflows/build.yml/badge.svg?branch=main)](https://github.com/ed555009/utilities-jwt-ed25519/actions/workflows/build.yml)
 [![Nuget](https://img.shields.io/nuget/v/Utilities.Jwt.Ed25519)](https://www.nuget.org/packages/Utilities.Jwt.Ed25519)
 
 ![Coverage](https://sonarcloud.io/api/project_badges/measure?project=utilities-jwt-ed25519&metric=coverage)
