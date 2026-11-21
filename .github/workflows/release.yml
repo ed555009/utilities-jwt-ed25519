@@ -1,0 +1,98 @@
+name: release
+
+# GitHub reads a workflow_run trigger only from the default branch.
+on:
+  workflow_run:
+    workflows: [build]
+    types: [completed]
+    branches: [main]
+
+permissions: {}
+
+# Release one version at a time. Do not cancel a waiting release.
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+env:
+  PACKAGE_ID: Utilities.Jwt.Ed25519
+  DOTNET_SDK_VERSION: 10.0.x
+  DOTNET_NOLOGO: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+
+jobs:
+  release-package:
+    if: github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push'
+    runs-on: ubuntu-latest
+    # NOTE: The nuget.org Trusted Publishing policy names this file and this environment.
+    environment: production
+    permissions:
+      actions: read
+      id-token: write
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - name: Download package
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: package
+          path: artifacts
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ github.token }}
+
+      # Read the version from the package file name. The run_number of this workflow is not the package version.
+      - name: Read version
+        id: version
+        run: |
+          package=$(find artifacts -maxdepth 1 -name "$PACKAGE_ID.*.nupkg" ! -name '*.symbols.nupkg')
+          if [ "$(printf '%s\n' "$package" | grep -c .)" -ne 1 ]; then
+            echo "::error::Expected 1 package file, found: $package"
+            exit 1
+          fi
+          version=$(basename "$package" .nupkg)
+          version=${version#"$PACKAGE_ID."}
+          if ! printf '%s' "$version" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "::error::Version '$version' is not in the format major.minor.patch"
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Set up .NET SDK
+        uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
+        with:
+          dotnet-version: ${{ env.DOTNET_SDK_VERSION }}
+
+      # Exchange the GitHub OIDC token for a short-lived NuGet API key.
+      - name: Log in to NuGet
+        id: login
+        uses: NuGet/login@8d196754b4036150537f80ac539e15c2f1028841 # v1.2.0
+        with:
+          user: ${{ secrets.NUGET_USER }}
+
+      # The pattern *.nupkg does not match .snupkg files. dotnet nuget push sends the .snupkg file in the same folder.
+      - name: Upload package to NuGet
+        env:
+          NUGET_API_KEY: ${{ steps.login.outputs.NUGET_API_KEY }}
+        run: >
+          dotnet nuget push "artifacts/*.nupkg"
+          --api-key "$NUGET_API_KEY"
+          --source https://api.nuget.org/v3/index.json
+
+  create-tag:
+    needs: release-package
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      # Use head_sha. github.sha is the latest commit on main, not the commit that the build run tested.
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+
+      - name: Create tag
+        env:
+          VERSION: ${{ needs.release-package.outputs.version }}
+        run: |
+          git tag "$VERSION"
+          git push origin "$VERSION"
